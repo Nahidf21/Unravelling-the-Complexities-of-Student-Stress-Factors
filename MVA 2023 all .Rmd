@@ -1,0 +1,703 @@
+---
+title: "MVA Project"
+author: "Group2"
+date: "2023-11-28"
+output: pdf_document
+---
+
+
+```{r}
+main_data <- read.csv("StressLevelDataset.csv")
+head(main_data)
+```
+```{r}
+# create a new column name "Student_id", each observation of this column shows a single student.
+main_data$student_id <- paste("S", 1:nrow(main_data), sep="")
+head(main_data)
+```
+```{r}
+# Move the "Student_id" column from last to first column.
+library(dplyr)
+main_data <- main_data %>% select(student_id, everything())
+tail(main_data)
+```
+```{r}
+# check the dimension of the dataset 
+dim(main_data)
+```
+```{r}
+# Comprehensiv view of the data types in our dataset
+glimpse(main_data)
+```
+This visualization provides insights into the data types of the variables, their range, and the dimensions of the dataset. We have a dataset comprising 1100 observations and 22 variables. Among these, only one variable is of character (chr) type, while the remaining 21 variables are of integer (int) type.
+
+```{r}
+# Find out and visualization missing data.
+library(visdat)
+vis_miss(main_data, show_perc = FALSE)
+```
+Here we visualize the missing values. The black markes means meesing values are there. 
+```{r}
+# find specific column which has missing value
+colSums(is.na(main_data))
+```
+From the analysis, it's evident that the variables Depression, Breathing Problem, Basic Needs, Headache, Blood Pressure, Living Conditions, and Sleep Quality contain a small number of missing values. Considering our dataset comprises 1100 observations, we prefer not to discard any data points. Therefore, we will proceed with column-based mean imputation to address these missing values effectively.
+`
+```{r}
+# mean imputetion for specific column.
+for(column in names(main_data[c("headache","living_conditions","blood_pressure","sleep_quality","basic_needs", "breathing_problem","depression")])) {
+  main_data[[column]] <- ifelse(is.na(main_data[[column]]), mean(main_data[[column]], na.rm = TRUE), main_data[[column]])
+}
+vis_miss(main_data, show_perc = FALSE)
+```
+Following mean imputation, we reviewed our data and confirmed that there are no longer any missing values. 
+
+
+```{r}
+num_cols <- length(names(main_data[,2:22]))
+
+# Determine the layout of the plot grid
+num_rows <- ceiling(sqrt(num_cols))
+num_cols_in_grid <- ceiling(num_cols / num_rows)
+
+# Adjusting margins and setting up the plot layout
+par(mfrow = c(num_rows, num_cols_in_grid), mar = c(2, 2, 2, 2))
+
+# Loop through each column and create a histogram
+for (i in 2:num_cols) {
+  hist(main_data[,i], main = names(main_data)[i], breaks = 10, cex.main = 0.8)
+}
+
+# Reset to default single panel plot layout
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+```
+This histogram visualization helps us analyze the distribution of our variables. It appears that most variables do not follow a normal distribution, with the exception of the 'anxiety_level'. Additionally, the visualization provides insights into outliers; notably, it is evident that the 'depression level' variable contains some outliers.
+```{r}
+# check outliers 
+plot(main_data[,2:7])
+```
+From this visualization we can say that "depression" variable has some outlines.
+```{r}
+plot(main_data[,8:15])
+```
+```{r}
+plot(main_data[,16:22])
+```
+We don't see any other outliers in this dataset except for the 'depression' variable
+```{r}
+boxplot(main_data$depression, main= "Depression")
+
+```
+
+
+```{r}
+
+plot(main_data$depression, main_data$anxiety_level, col = "grey", pch = ".", xlab = "depression", ylab = "anxiety_levell")
+# adds text to plot, we use abbreviated names of city as plotting symbols
+text(main_data$depression, main_data$anxiety_level, cex = 0.6, labels = main_data$student_id, pos = 2)
+```
+Here Depression variable contain "S281","S352", "S629","S934","S509", "S237" outliers.
+
+```{r}
+outliers <- c("S281","S352", "S629","S934","S509", "S237")
+outliers_index <- match(outliers, main_data$student_id)
+outliers_index
+
+```
+```{r}
+# drop outliers
+main_clean_data <-main_data[-outliers_index,]
+
+plot(main_clean_data$depression, main_clean_data$anxiety_level, col = "grey", pch = ".", xlab = "depression", ylab = "anxiety_levell")
+# adds text to plot, we use abbreviated names of city as plotting symbols
+text(main_clean_data$depression, main_clean_data$anxiety_level, cex = 0.6, labels = main_data$student_id, pos = 2)
+
+```
+We can now ascertain that the variable representing depression does not exhibit any clear outliers.
+```{r}
+# now we don't have any extreme outliers 
+plot(main_clean_data[,2:7])
+```
+This scatter plot visualization indicates that our dataset does not contain any significant outliers.
+
+```{r}
+library(corrplot)
+# The correletion metrix 
+main_clean_data_corr <- cor(main_clean_data[-c(1,22)])
+# plot the correlation matrix
+corrplot(main_clean_data_corr, method = "number", type = "upper", tl.col ="black", tl.srt = 45, tl.cex= .6, number.cex = .3)
+```
+Based on the correlation matrix, it's evident that the variables in our dataset are highly correlated with each other. Given the large number of variables, all of which are numerical except for one, this dataset appears to be well-suited for multivariate analysis. This analysis will allow us to explore the complex interrelationships between these variables in depth.
+
+```{r}
+
+install.packages("plotly")
+library(plotly)
+
+
+# Create a new column for color categorization
+main_clean_data$performance_color <- ifelse(main_clean_data$academic_performance <= 2, "blue",  # Low
+                                 ifelse(main_clean_data$academic_performance <= 3, "green",  # Mild
+                                        "red"))  # High
+
+# Create a new column for labels
+main_clean_data$performance_label <- ifelse(main_clean_data$academic_performance <= 2, "Low",
+                                 ifelse(main_clean_data$academic_performance <= 3, "Mild",
+                                        "High"))
+
+# Create a 3D scatter plot with color based on the new category
+plot <- plot_ly(main_clean_data, x = ~anxiety_level, y = ~academic_performance, z = ~living_conditions, 
+                type = 'scatter3d', mode = 'markers',
+                marker = list(color = ~performance_color),
+                text = ~performance_label, textposition = "top center")
+
+# Customize the layout
+plot <- plot %>% layout(
+    scene = list(
+        xaxis = list(title = 'Anxiety Level'),
+        yaxis = list(title = 'Academic Performance'),
+        zaxis = list(title = 'Living Condition')), 
+    title = "3D Scatter Plot with Academic Performance"
+)
+
+# Display the plot
+plot
+
+
+
+```
+In this 3D visualization, the blue points represent low academic performance, the green points represent medium academic performance, and the red points indicate high academic performance. This visualization suggests that if a student exhibits a low anxiety level and their living condition is between mild to high, then there's a higher likelihood of the student achieving a high academic score. 
+
+
+```{r}
+# extract out clean data 
+write.csv(main_clean_data[-c(22,23,24)], "my_data.csv", row.names = FALSE)
+
+```
+
+Now dimension reduction 
+
+```{r}
+data_dim <- read.csv("my_data.csv", header = T)
+data_dim <- data_dim
+head(data_dim)
+data_dim.s<-scale(data_dim[-1])
+```
+
+```{r}
+data_dim_pca <- princomp(scale(data_dim[-1]), cor = T)
+summary(data_dim_pca)
+```
+Cumulative Proportion of Variance Explained by Components
+Comp.1 to Comp.5: These are the first five principal components derived from the PCA.
+Cumulative Proportion: This indicates the proportion of the dataset's total variance that is captured by each component cumulatively.
+Comp.1 captures 59.42% of the total variance.
+Comp.2 adds to this, cumulatively capturing 65.42% of the variance.
+This pattern continues, with the first five components cumulatively accounting for 74.68% of the total variance in the dataset.
+
+```{r}
+print((data_dim_pca$loadings), cut= 0.24)
+```
+Lets describe loading information from PCA.
+
+Component 1 (Mental and Social Stress Factors):
+
+Proportion of Variance: 59%
+Key Variables: anxiety_level, self_esteem, depression, sleep_quality, future_career_concerns, bullying
+Description: This component is heavily influenced by variables related to mental health and social stress. It seems to capture the overall mental and emotional state of individuals, including their concerns about the future and interactions with peers. High scores on this component might indicate high levels of stress and anxiety.
+
+Component 2 (Physical Health Indicators):
+
+Proportion of Variance: 6%
+Key Variables: blood_pressure, breathing_problem, future_career_concerns
+Description: Dominated by variables related to physical health, this component may represent the physiological manifestations of stress or other health conditions. The inclusion of future career concerns suggests a link between stress and physical health.
+
+Component 3 (Environmental and Academic Influences):
+
+Proportion of Variance: 3.4%
+Key Variables: noise_level, safety, basic_needs, academic_performance, study_load, teacher_student_relationship, peer_pressure
+Description: This component seems to capture the environmental factors and academic pressures that affect an individual. It includes aspects of the study environment, relationships in the academic setting, and pressures from peers.
+
+Component 4 (Physical and Environmental Well-being):
+
+Proportion of Variance: 2.9%
+Key Variables: mental_health_history, headache, breathing_problem, living_conditions
+Description: This component might reflect the overall physical well-being and living conditions of individuals. It combines elements of mental health history with current physical symptoms and environmental factors.
+
+Component 5 (Living Environment Quality):
+
+Proportion of Variance: 2.8%
+Key Variables: living_conditions, noise_level, breathing_problem
+Description: Focused on the quality of the living environment, this component relates to how factors like noise and air quality in one's living space might impact their health, particularly respiratory health.
+
+
+
+```{r}
+PCs <- data_dim_pca$scores
+row.names(data_dim) <- data_dim$student_id
+head(round(cbind(PCs[,1:4], scale(data_dim[-1])), 2))
+
+```
+From this Output, Lets select observation one and explain this:
+
+Physical Health Concerns: Student1 appears to have more issues related to physical health (notably breathing problems), as indicated by the high score in Comp.2 and the individual health indicators.
+
+Mental Health and Social Stress: While there are indications of moderate anxiety, overall mental health factors like depression and mental health history are below average, aligning with the negative score in Comp.1.
+
+Environmental and Academic Factors: The scores and values suggest a generally positive but not outstanding environment and academic situation. The student seems to have good relationships with teachers, moderate academic performance, and some level of engagement in extracurricular activities.
+
+Balanced Profile: Overall, student1's profile suggests a balance between various aspects of health, social, and academic life, with a notable emphasis on physical health concerns.
+
+# Cluster Analysis 
+K-Means Clustering
+```{r}
+plot.wgss = function(data_dim, maxc = nrow(data_dim) - 1) {
+wgss = numeric(maxc)
+for (i in 1:maxc) {
+km <- kmeans(data_dim, centers = i, nstart = 10)
+wgss[i] = km$tot.withinss
+}
+plot(1:maxc, wgss, type = "b", xlab = "Number of Clusters", ylab = "Within groups sum of squares",
+main = "Scree Plot")
+}
+plot.wgss(data_dim.s, maxc = 30) # Elbow test
+
+```
+In the context of K-means clustering, particularly when examining scree plots, "WGSS" stands for "Within-Group Sum of Squares". The primary goal in K-means clustering is to organize the data into a specific number of clusters,k, while minimizing the variation within each cluster, quantified by the WGSS. A lower WGSS value suggests that the data points are more tightly clustered around their respective centroids, indicating a more effective clustering.
+
+When analyzing a scree plot, which charts the WGSS against different numbers of clusters, we can discern the most suitable number of clusters for K-means clustering. In this scenario, the plot suggests that either 4 or 5 clusters might be the optimal choice, as indicated by the WGSS trend in the plot.
+
+```{r}
+set.seed(123)
+km<-kmeans(scale(data_dim[-1]),centers=5,nstart=10)
+# WGSS: within-group sum of squares
+km$tot.withinss
+```
+From the analysis of within-group sum of squares (WGSS) and the scree plot visualization in our K-means clustering, it becomes evident that the choice of cluster number significantly impacts the clustering effectiveness. When opting for 4 clusters, the WGSS stands at 7560.355. In contrast, choosing 5 clusters reduces the WGSS to 7197.533, indicating a tighter grouping of data points around their respective centroids. This lower WGSS with 5 clusters suggests a more optimal clustering arrangement. Therefore, based on the lower WGSS value and the insights provided by the scree plot, selecting 5 clusters appears to be the more effective choice for our K-means clustering model.
+
+```{r}
+#Plotting Kmeans Clusters
+plot(scale(data_dim[-1]), col = km$cluster, main = "K-Means Clusters")
+```
+This scatter plot presents a somewhat mixed outcome, making it challenging to discern clear clustering patterns. However, it can be observed that the green, blue, and red clusters are distinct from each other. In contrast, the remaining two clusters appear to overlap. This observation is based on a visualization that plots the variables 'self_esteem' and 'anxiety_level' using data extracted from the original scaled dataset. 
+
+```{r}
+
+
+# Define meaningful names for each cluster
+cluster_names <- c(1, 2, 3, 4, 5)
+
+# Define colors for each cluster
+cluster_colors <- c("red", "blue", "green", "yellow", "purple")
+
+# Plot the PCA scores
+plot(data_dim_pca$scores[, 1:2], col = "white", main = "PCA Biplot - Kmean Clustering")
+text(data_dim_pca$scores[, 1:2], labels = abbreviate(row.names(data_dim)), col = cluster_colors[km$cluster], cex = 0.5)
+
+# Add a corrected legend
+legend("topright", legend = cluster_names, fill = cluster_colors)
+
+
+```
+In this analysis, we implemented K-means clustering using PCA scores, choosing to form 5 clusters based on five principal components. The resulting clusters display varied degrees of separation: the blue, red, and green clusters each form distinct groupings. However, the remaining two clusters, colored yellow and purple, exhibit some overlap.
+```{r}
+km$centers
+```
+
+```{r}
+# Define meaningful names for each cluster
+cluster_names <- c("Living Environment Quality Factor", "Physical Health Indicators", "Mental and Social Stress", "Environmental and Academic Influences", "Physical and Environmental Well-being")
+
+# Define colors for each cluster
+cluster_colors <- c("red", "blue", "green", "yellow", "purple")
+
+# Plot the PCA scores
+plot(data_dim_pca$scores[, 1:2], col = "white", main = "PCA Biplot - Kmean Clustering")
+text(data_dim_pca$scores[, 1:2], labels = abbreviate(row.names(data_dim)), col = cluster_colors[km$cluster], cex = 0.5)
+
+# Add a corrected legend
+legend("topright", legend = cluster_names, fill = cluster_colors, cex = 0.7)
+
+```
+Based on the K-means cluster centers and the PCA loadings, we can interpret the clusters as follows:
+
+Cluster One is indicative of the "Living Environment Quality Factor," suggesting a focus on variables related to the quality of living conditions.
+Cluster Two aligns with "Physical Health Indicators," pointing to elements such as physical wellbeing and health-related issues.
+Cluster Three is characterized by "Mental and Social Stress Factors," highlighting aspects like mental health, stress, and social pressures.
+Cluster Four is associated with "Environmental and Academic Influences," encompassing factors related to academic environments and surrounding influences.
+Cluster Five corresponds to "Physical and Environmental Well-being," representing a combination of physical health and environmental quality.
+
+MODEL BASED CLUSTERING
+
+```{r}
+library(mclust)
+mc <- Mclust(data_dim.s)
+# Check the BIC plot if you think the number of clusters doesn't make sense
+plot(mc, what = "BIC")
+```
+
+
+```{r}
+summary(mc$BIC)
+```
+After applying model-based clustering to our dataset, we encountered a discrepancy between the theoretical expectations and the empirical results. The Bayesian Information Criterion (BIC) suggested that the optimal number of clusters is nine (as indicated by the lowest BIC value for nine clusters). However, our theoretical understanding of the dataset leads us to expect only five distinct clusters. Given this contradiction, we might consider reassessing the suitability of model-based clustering for our dataset, or revisiting our theoretical assumptions about the number of clusters present.
+
+```{r}
+mc <- Mclust(data_dim.s, G = 9)
+plot(data_dim_pca$scores[, 1:2], col = "white", main = "PCA Biplot - Model-based Clustering")
+text(data_dim_pca$scores[, 1:2], labels = abbreviate(row.names(data_dim)), col = mc$classification,cex = 0.5)
+
+```
+We have determined that K-means clustering yields more effective clustering results for our dataset, leading us to choose it over model-based clustering. This decision is based on the superior performance of K-means in creating meaningful clusters, aligning with our data analysis objectives. Consequently, we have decided to proceed with the clusters identified by the K-means method.
+
+
+Exploratory Factor Analysis
+
+```{r}
+
+stress.fa <- factanal(data_dim[,-1], factors =4)
+stress.fa
+```
+```{r}
+f.loading <- stress.fa$loadings
+corHat_stress <- f.loading %*% t(f.loading) + diag(stress.fa$uniquenesses)
+```
+```{r}
+corr <- cor(data_dim[-1])
+```
+```{r}
+rmse = sqrt(mean((corHat_stress - corr)^2))
+rmse
+```
+Here our approximate correlation matrix and the actual correlation matrix is same (The RMSE value is small). So the data is perfect for the model. We can accept our EFA model. Even our p value is significant. 
+
+```{r}
+# lets find the latent variables
+stress_loading <- stress.fa$loadings
+print(stress_loading, cut=.5)
+```
+Factor1 - "Psychosocial and Environmental Well-being":
+This factor is predominantly associated with mental health and related aspects. The observed variables include:
+
+anxiety_level (0.749)
+self_esteem (-0.648)
+mental_health_history (0.662)
+depression (0.713)
+headache (0.650)
+sleep_quality (-0.742)
+breathing_problem (0.613)
+noise_level (0.606)
+living_conditions (-0.581)
+safety (-0.614)
+academic_performance (-0.647)
+study_load (0.618)
+teacher_student_relationship (-0.602)
+future_career_concerns (0.745)
+peer_pressure (0.722)
+extracurricular_activities (0.721)
+bullying (0.738)
+
+Factor2 - "Physical Health":
+This factor is related to physical health, represented by:
+blood_pressure (0.975)
+
+Factor3 - "Social Support and Relations":
+This factor is associated with social aspects, indicated by:
+social_support (0.615)
+
+Factor4 - "Basic Personal Needs":
+This factor is related to basic personal needs, as represented by:
+basic_needs (0.823)
+
+
+
+# CFA Model 
+In this module, we will consider confirmatory factor analysis models in which particular manifest variables are allowed to relate to particular factors whilst other manifest variables are constrained to have zero loadings on some of the factors.
+
+# CFA versus EFA
+
+* A confirmatory factor analysis (CFA) model may arise from theoretical considerations or be based on the results of an EFA where the investigator might wish to postulate a specific model for a new set of similar data.
+
+* In EFA, the loading matrix was nonzero for all factory related to all variables and no constraints are placed on which manifest variables load on which factors. But in CFA we set some constraints on the loadings.
+
+* In CFA, we allow that the factors are correlated. 
+
+* Both EFA and CFA use maximum likelihood for their estimation. The main difference is that in CFA, you have a theory and you try to confirm it.
+```{r}
+Stress1 <-read.csv("StressLevelDataset.csv")
+Stress <- Stress1[, -21]
+corr<-round(cor(Stress, use = "complete.obs"),2)
+efa_stress <- factanal(covmat = corr, n.obs = 1100, factors = 5)
+#Final CFA model with 5 factors
+
+library("sem")
+
+cfa1_model <- specifyModel(text = "
+Psychological_Factors ->   anxiety_level, lambda1, NA
+Psychological_Factors ->   self_esteem, lambda2, NA
+Psychological_Factors ->   mental_health_history, lambda3, NA  
+Psychological_Factors ->   depression, lambda4, NA
+Physiological_Factors ->   headache, lambda5, NA
+Physiological_Factors ->   blood_pressure, lambda6, NA
+Physiological_Factors ->   sleep_quality, lambda7, NA
+Physiological_Factors ->   breathing_problem, lambda8, NA
+Environmental_Factors ->   noise_level, lambda9, NA
+Environmental_Factors ->   living_conditions, lambda10, NA
+Environmental_Factors ->   safety, lambda11, NA
+Environmental_Factors ->   basic_needs, lambda12, NA
+Academic_Factors ->   academic_performance, lambda13, NA 
+Academic_Factors ->   study_load, lambda14, NA
+Academic_Factors ->   teacher_student_relationship, lambda15, NA
+Academic_Factors ->   future_career_concerns, lambda16, NA
+Social_Factor ->   social_support, lambda17, NA
+Social_Factor ->   peer_pressure, lambda18, NA
+Social_Factor ->   extracurricular_activities, lambda19, NA
+Social_Factor ->   bullying, lambda20, NA
+
+
+Psychological_Factors <->  Physiological_Factors, rho1, NA
+Psychological_Factors <->  Environmental_Factors, rho2, NA
+Psychological_Factors <->  Academic_Factors, rho3, NA
+Psychological_Factors <-> Social_Factor, rho4, NA
+
+Physiological_Factors <-> Environmental_Factors, rho5, NA
+Physiological_Factors <-> Academic_Factors, rho6, NA
+Physiological_Factors <-> Social_Factor, rho7, NA
+
+Environmental_Factors <-> Academic_Factors, rho8, NA
+Environmental_Factors <-> Social_Factor, rho9, NA
+
+Academic_Factors      <->  Social_Factor, rho10, NA
+
+anxiety_level    	    <-> anxiety_level, theta1, NA
+self_esteem  	 	      <->   self_esteem, theta2, NA
+mental_health_history <->  mental_health_history, theta3, NA
+depression 		        <->   depression, theta4, NA
+
+headache   	      	  <->   headache, theta5, NA
+blood_pressure   	    <->   blood_pressure, theta6, NA
+sleep_quality 		    <->   sleep_quality, theta7, NA
+breathing_problem  	  <->   breathing_problem, theta8, NA
+
+noise_level    	      <->	noise_level, theta9, NA
+living_conditions     <->	living_conditions, theta10, NA
+safety 		            <-> safety, theta11, NA
+basic_needs           <->	basic_needs, theta12, NA
+
+academic_performance          <->	academic_performance, theta13, NA
+study_load	                  <->	study_load, theta14, NA
+teacher_student_relationship	<->  teacher_student_relationship, theta15, NA
+future_career_concerns        <->	future_career_concerns, theta16, NA
+
+social_support 	              <->	social_support, theta17, NA
+peer_pressure               	<->	peer_pressure, theta18, NA
+extracurricular_activities    <->	extracurricular_activities, theta19, NA
+bullying                      <->	bullying, theta20, NA
+
+
+Psychological_Factors  <->  Psychological_Factors, NA, 1
+Physiological_Factors  <->  Physiological_Factors, NA, 1
+Environmental_Factors  <->  Environmental_Factors, NA, 1
+Academic_Factors       <->  Academic_Factors, NA, 1
+Social_Factor          <->  Social_Factor, NA, 1
+")
+
+
+#ability_sem2 <- sem(cfa1_model, corr, 1100)
+
+#summary(ability_sem2)
+```
+
+```{r}
+#install.packages("sem")
+#install.packages("semPlot")
+#Model with all 5 factors
+library("sem")
+cfa_model <- specifyModel(text = "
+Psychological_Factors         -> anxiety_level,lambda1, NA
+Psychological_Factors         -> self_esteem, lambda2, NA
+Psychological_Factors         -> mental_health_history,lambda3, NA
+Psychological_Factors         -> depression, lambda4, NA
+Physiological_Factors         -> headache, lambda5, NA
+Physiological_Factors 	      -> blood_pressure, lambda6, NA
+Physiological_Factors         -> sleep_quality, lambda7, NA
+Physiological_Factors         -> breathing_problem, lambda8, NA
+Environmental_Factors         -> noise_level, lambda9, NA
+Environmental_Factors         -> living_conditions, lambda10, NA
+Environmental_Factors         -> safety, lambda11, NA
+Environmental_Factors         -> basic_needs, lambda12, NA
+Academic_Factors              -> academic_performance, lambda13, NA
+Academic_Factors              -> study_load, lambda14, NA
+Academic_Factors              -> teacher_student_relationship, lambda15, NA
+Academic_Factors              -> future_career_concerns, lambda16, NA
+Social_Factor                 -> social_support, lambda17, NA
+Social_Factor                 -> peer_pressure, lambda18, NA
+Social_Factor                 -> extracurricular_activities, lambda19, NA
+Social_Factor                 -> bullying, lambda20, NA
+Psychological_Factors        <-> Physiological_Factors, rho1, NA
+Psychological_Factors        <-> Environmental_Factors , rho2, NA	
+Psychological_Factors        <-> Academic_Factors, rho3, NA
+Psychological_Factors        <-> Social_Factor, rho4, NA
+Physiological_Factors        <-> Environmental_Factors, rho5, NA
+Physiological_Factors        <-> Academic_Factors, rho6, NA
+Physiological_Factors        <-> Social_Factor, rho7, NA
+Environmental_Factors        <-> Academic_Factors, rho8, NA
+Environmental_Factors        <-> Social_Factor, rho9, NA
+Academic_Factors             <-> Social_Factor, rho10, NA
+anxiety_level 	             <-> anxiety_level, theta1, NA
+self_esteem 	               <->   self_esteem, theta2, NA
+mental_health_history        <-> mental_health_history, theta3, NA
+depression 	                 <-> depression,theta4, NA
+headache 	                   <-> headache, theta5, NA
+blood_pressure               <-> blood_pressure, theta6, NA
+sleep_quality                <-> sleep_quality, theta7, NA
+breathing_problem            <-> breathing_problem, theta8, NA
+noise_level                  <-> noise_level, theta9, NA
+living_conditions            <-> living_conditions, theta10, NA
+safety            	         <-> safety, theta11, NA
+basic_needs                  <-> basic_needs, theta12, NA
+academic_performance         <-> academic_performance, theta13, NA
+study_load                   <->study_load, theta14, NA
+teacher_student_relationship <-> teacher_student_relationship, theta15, NA
+future_career_concerns       <->  future_career_concerns, theta16, NA
+social_support 		           <-> social_support, theta17, NA
+peer_pressure 		           <-> peer_pressure, theta18, NA
+extracurricular_activities   <-> extracurricular_activities, theta19, NA
+bullying 		                 <-> bullying, theta20, NA
+Psychological_Factors        <-> Psychological_Factors, NA, 1
+Physiological_Factors        <-> Physiological_Factors, NA, 1
+Environmental_Factors        <-> Environmental_Factors, NA, 1
+Academic_Factors             <-> Academic_Factors, NA, 1
+Social_Factor                <-> Social_Factor, NA, 1
+
+")
+
+cfa_sem <- sem(cfa_model, corr, 1100)
+
+summary(cfa_sem)
+```
+
+```{r}
+New_Stress <- Stress[, -c(8,9,10,11,12,14,15)]
+
+corr_new <- cor(New_Stress)
+head(corr_new)
+
+
+
+```
+
+```{r}
+
+#Final CFA model with 3 factors
+
+cfa_model1 <- specifyModel(text = "
+
+Physio_social_Factors         -> anxiety_level,lambda1, NA
+Physio_social_Factors         -> self_esteem, lambda2, NA
+Physio_social_Factors         -> mental_health_history,lambda3, NA
+Physio_social_Factors         -> depression, lambda4, NA
+Physio_social_Factors         -> headache, lambda5, NA
+Physical_Factors 	            -> blood_pressure, lambda6, NA
+Physio_social_Factors         -> sleep_quality, lambda7, NA
+Physio_social_Factors         -> academic_performance, lambda13, NA
+Physio_social_Factors         -> future_career_concerns, lambda16, NA
+Social_Factor                 -> social_support, lambda17, NA
+Physio_social_Factors         -> peer_pressure, lambda18, NA
+Physio_social_Factors         -> extracurricular_activities, lambda19, NA
+Physio_social_Factors         -> bullying, lambda20, NA
+
+Physio_social_Factors        <-> Physical_Factors, rho1, NA
+Physio_social_Factors        <-> Social_Factor , rho2, NA	
+Physical_Factors             <-> Social_Factor, rho3, NA
+
+
+anxiety_level 	             <-> anxiety_level, theta1, NA
+self_esteem 	               <-> self_esteem, theta2, NA
+mental_health_history        <-> mental_health_history, theta3, NA
+depression 	                 <-> depression,theta4, NA
+headache 	                   <-> headache, theta5, NA
+blood_pressure               <-> blood_pressure, theta6, NA
+sleep_quality                <-> sleep_quality, theta7, NA
+academic_performance         <-> academic_performance, theta8, NA
+social_support 		           <-> social_support, theta9, NA
+peer_pressure 		           <-> peer_pressure, theta10, NA
+extracurricular_activities   <-> extracurricular_activities, theta11, NA
+bullying 		                 <-> bullying, theta12, NA
+
+
+Physio_social_Factors       <-> Physio_social_Factors, NA, 1
+Physical_Factors            <-> Physical_Factors, NA, 1
+Social_Factor               <-> Social_Factor, NA, 1
+
+
+")
+
+cfa_sem <- sem(cfa_model1, corr_new, 1100)
+
+summary(cfa_sem)
+
+```
+
+
+```{r}
+# restricted Cor matrix
+head(cfa_sem$C)
+
+# non-restricted Cor matrix
+head(cfa_sem$S) # This is the original correlation matrix: 
+
+# the root mean square error
+sqrt(mean((cfa_sem$C-cfa_sem$S)^2))
+```
+
+```{r}
+options(fit.indices = c("GFI", "AGFI", "SRMR")) # Some fit indices
+summary(cfa_sem)
+```
+
+```{r}
+
+dif = cfa_sem$C-cfa_sem$S
+head(round(dif, 2))
+# it measures the root mean square error of the lower or upper triangle of the discripancy matrix.
+sqrt(mean(dif[lower.tri(dif, diag = TRUE)]^2))
+
+```
+```{r}
+
+
+pathDiagram(cfa_sem)
+
+library(semPlot)
+semPaths(cfa_sem, rotation = 2, 'est')
+```
+
+
+# Regression Analysis: 
+In the regression analysis we're conducting, the PCA scores are being utilized as predictor variables, while the stress level variable from our actual dataset serves as the response variable. This method leverages the principal components derived from PCA to predict the stress levels. The principal components are essentially a transformation of our original variables into a new set of uncorrelated features, summarizing key patterns in the data. By using 5 principal components  as predictors, the regression model aims to understand how these underlying patterns relate to the stress levels in out dataset.
+
+```{r}
+library(lmtest)
+
+# Convert the PCA scores to a data frame
+pca_scores_df <- as.data.frame(data_dim_pca$scores[,1:5])
+
+# Add the stress level data to the PCA scores data frame
+pca_scores_df$stress_level <- main_clean_data$stress_level
+
+# Perform the linear regression
+model <- lm(stress_level ~ ., data = pca_scores_df)
+
+# Summary of the model
+summary(model)
+```
+Short summery of the regression analysis:
+
+Residuals: The residuals (the differences between observed and predicted values) seem reasonably distributed around 0, which is a good sign.
+Multiple R-squared: 0.7813 indicates that approximately 78.13% of the variability in stress levels is explained by our model. This is a strong model in terms of explanatory power.
+Adjusted R-squared: 0.7802 adjusts for the number of predictors in the model and is also relatively high, indicating a good fit.
+F-statistic: The F-statistic tests the overall significance of the model. A very low p-value (< 2.2e-16) suggests that our model is statistically significant.
+
+
+
